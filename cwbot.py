@@ -1,74 +1,79 @@
-```python
 #!/usr/bin/env python3
 
+import re
 import os
-import subprocess
-import shutil
-import sys
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram import Update
 
-print("\n                                        Created By PW JARVIS")
-print("                                        For assistance, please visit @PWJARVIS on Telegram")
-print("                                        ______________________________________________________\n")
+# Telegram bot token (replace with your BotFather token)
+TOKEN = "YOUR_BOT_TOKEN_HERE"
 
-# Check for yt-dlp
-if not shutil.which("yt-dlp"):
-    print("Error: yt-dlp not found. Please install it with: pip install yt-dlp")
-    sys.exit(1)
+# Regular expression to match yt-dlp download commands
+pattern = r'yt-dlp --no-warnings --progress --console-title -o "([^"]+)" "([^"]+)"'
 
-# Check for ffmpeg (required for .m3u8 processing)
-if not shutil.which("ffmpeg"):
-    print("Error: ffmpeg not found. Please ensure ffmpeg is installed and added to your system PATH.")
-    print("Download from https://ffmpeg.org/download.html, extract to C:\\ffmpeg, and add C:\\ffmpeg\\bin to PATH.")
-    print("Or install Chocolatey and run: choco install ffmpeg")
-    sys.exit(1)
+async def start(update: Update, context):
+    await update.message.reply_text("Send me a .sh file, and I'll extract the yt-dlp links into a .txt file in 'name:url' format!")
 
-# Create and navigate to appropriate directory
-os.makedirs("PWJarvis", exist_ok=True)
-os.chdir("PWJarvis")
+async def handle_file(update: Update, context):
+    file = update.message.document
+    if not file.file_name.endswith('.sh'):
+        await update.message.reply_text("Please send a .sh file!")
+        return
 
-batch = "Arjuna NEET 3.0 2025"
-os.makedirs(batch, exist_ok=True)
-os.chdir(batch)
+    # Download the file
+    file_path = file.file_name
+    new_file = await context.bot.get_file(file.file_id)
+    await new_file.download_to_drive(file_path)
 
-# Navigate to the target directory (same as original script)
-print(":: Subject: Notices")
-os.makedirs("Notices/Batch Demo Videos/Lectures", exist_ok=True)
-os.chdir("Notices/Batch Demo Videos/Lectures")
-
-# Download parameters
-url = "https://stream.pwjarvis.app/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2aWRlb0lkIjoiMTE2MzYxNGYtYTA5YS00YWIzLWFlNmItODJlYmI1ODIzOGUzIiwiZXhwIjoxNzU0NzE5MTkyfQ.RhTJPf3awMA-v-JCCrWmAH5VlH2vFLItiyuPv_jhW8U/hls/720/main.m3u8"
-output_file = "unnamed.mp4"
-
-# Check if file already exists
-if os.path.exists(output_file):
-    print(f"File exists: {output_file} - skipping download")
-else:
-    print(f"\nStarting download: {output_file}")
-    # Run yt-dlp with parallel download options
+    # Read the input script
     try:
-        subprocess.run([
-            "yt-dlp",
-            "--no-warnings",
-            "--progress",
-            "--console-title",
-            "-f", "bestvideo+bestaudio/best",
-            "--concurrent-fragments", "16",  # Parallel download of up to 16 fragments
-            "--no-check-certificate",  # Bypass potential SSL issues
-            "-o", output_file,
-            url
-        ], check=True)
-        print(f"Download completed: {output_file}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error during download: {e}")
-        print("Try reducing concurrent fragments to 8 by editing the script.")
-        sys.exit(1)
-    except FileNotFoundError:
-        print("Error: yt-dlp executable not found. Please install it with: pip install yt-dlp")
-        sys.exit(1)
+        with open(file_path, 'r') as f:
+            script_content = f.read()
+    except Exception as e:
+        await update.message.reply_text(f"Error reading file: {str(e)}")
+        os.remove(file_path)
+        return
 
-# Get the full path of the downloaded file
-output_path = os.path.abspath(output_file)
-print(f"\nDownload completed. File saved in {output_path}")
-print("Press Enter to exit.")
-input()
-```
+    # Find all matches
+    matches = re.findall(pattern, script_content)
+    if not matches:
+        await update.message.reply_text("No yt-dlp links found in the file!")
+        os.remove(file_path)
+        return
+
+    # Create output .txt file
+    output_file = file_path.rsplit('.', 1)[0] + '.txt'
+    try:
+        with open(output_file, 'w') as f:
+            for name, url in matches:
+                f.write(f"{name}:{url}\n")
+    except Exception as e:
+        await update.message.reply_text(f"Error creating output file: {str(e)}")
+        os.remove(file_path)
+        return
+
+    # Send the output file back to the user
+    try:
+        with open(output_file, 'rb') as f:
+            await update.message.reply_document(document=f, filename=output_file)
+        await update.message.reply_text(f"Download list created: {output_file}")
+    except Exception as e:
+        await update.message.reply_text(f"Error sending file: {str(e)}")
+    finally:
+        # Clean up files
+        os.remove(file_path)
+        os.remove(output_file)
+
+def main():
+    # Create the Application instance
+    application = Application.builder().token(TOKEN).build()
+
+    # Add handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_file))
+
+    # Start the bot
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
