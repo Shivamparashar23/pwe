@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 
 import os
 import subprocess
@@ -9,17 +9,18 @@ print("\n                                        Created By PW JARVIS")
 print("                                        For assistance, please visit @PWJARVIS on Telegram")
 print("                                        ______________________________________________________\n")
 
-# Check for yt-dlp
-if not shutil.which("yt-dlp"):
-    print("Error: yt-dlp not found. Please ensure yt-dlp is installed and added to your system PATH.")
-    print("You can install it via pip: pip install yt-dlp")
+# Check for aria2c
+if not shutil.which("aria2c"):
+    print("Error: aria2c not found. Please ensure aria2c is installed and added to your system PATH.")
+    print("Install via Chocolatey: choco install aria2")
+    print("Or download from https://aria2.github.io/ and add to PATH.")
     sys.exit(1)
 
 # Check for ffmpeg (required for .m3u8 processing)
 if not shutil.which("ffmpeg"):
     print("Error: ffmpeg not found. Please ensure ffmpeg is installed and added to your system PATH.")
-    print("You can install it via Chocolatey with: choco install ffmpeg")
-    print("Or download from https://ffmpeg.org/download.html and add it to PATH.")
+    print("Install via Chocolatey: choco install ffmpeg")
+    print("Or download from https://ffmpeg.org/download.html and add to PATH.")
     sys.exit(1)
 
 # Create and navigate to appropriate directory
@@ -44,25 +45,27 @@ if os.path.exists(output_file):
     print(f"File exists: {output_file} - skipping download")
 else:
     print(f"\nStarting download: {output_file}")
-    # Run yt-dlp with options for faster .m3u8 downloading
+    # Run aria2c with parallel download options
     try:
         subprocess.run([
-            "yt-dlp",
-            "--no-warnings",
-            "--progress",
-            "--console-title",
-            "-f", "bestvideo+bestaudio/best",  # Select best quality
-            "--concurrent-fragments", "8",     # Download up to 8 fragments in parallel
+            "aria2c",
+            url,
             "-o", output_file,
-            url
+            "-x", "16",  # Maximum 16 connections per server
+            "-s", "50",  # Split into 50 segments
+            "-k", "1M",  # Minimum split size of 1MB
+            "--allow-overwrite=true",
+            "--auto-file-renaming=false",
+            "--file-allocation=none"  # Faster for large files
         ], check=True)
         print(f"Download completed: {output_file}")
     except subprocess.CalledProcessError as e:
         print(f"Error during download: {e}")
+        print("The server may not support 50 segments. Try reducing to 20 segments by editing the script.")
         sys.exit(1)
     except FileNotFoundError:
-        print("Error: yt-dlp executable not found. Please ensure yt-dlp is installed and in your PATH.")
-        print("Install via pip: pip install yt-dlp")
+        print("Error: aria2c executable not found. Please ensure aria2c is installed and in your PATH.")
+        print("Install via Chocolatey: choco install aria2")
         sys.exit(1)
 
 # Get the full path of the downloaded file
